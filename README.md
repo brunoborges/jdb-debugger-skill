@@ -20,6 +20,11 @@ When activated, this skill enables AI agents to:
 ```
 jdb-debugger/
 ├── SKILL.md                        # Main skill instructions
+├── agents/
+│   ├── jdb-debugger.agent.md       # Orchestrator — triages and delegates
+│   ├── jdb-session.agent.md        # Interactive debugging sub-agent
+│   ├── jdb-diagnostics.agent.md    # Quick diagnostics sub-agent
+│   └── jdb-analyst.agent.md        # Read-only analysis sub-agent
 ├── scripts/
 │   ├── jdb-launch.sh               # Launch a JVM under JDB
 │   ├── jdb-attach.sh               # Attach JDB to a running JVM
@@ -29,6 +34,35 @@ jdb-debugger/
     ├── jdb-commands.md              # Complete JDB command reference
     └── jdwp-options.md              # JDWP agent configuration options
 ```
+
+## Custom Agents
+
+The skill includes a multi-agent chain for orchestrated Java debugging workflows. The agents are defined as `.agent.md` files and can be used with VS Code Copilot's custom agent feature.
+
+### Agent Architecture
+
+```
+User → JDB Debugger (orchestrator)
+         ├── jdb-session       → Interactive debugging (launch/attach, breakpoints, stepping)
+         ├── jdb-diagnostics   → Quick JVM health checks (thread dumps, deadlock detection)
+         └── jdb-analyst       → Read-only analysis (stack traces, root cause reports)
+```
+
+| Agent | Role | Tools | User-Invocable |
+|-------|------|-------|----------------|
+| `JDB Debugger` | Orchestrator — triages requests and delegates | `read`, `search`, `agent` | Yes |
+| `jdb-session` | Interactive JDB sessions (launch/attach) | `execute`, `read`, `search` | No |
+| `jdb-diagnostics` | Automated diagnostics collection | `execute`, `read` | No |
+| `jdb-analyst` | Read-only analysis of traces and logs | `read`, `search`, `web` | No |
+
+### Usage
+
+1. Copy the `agents/` directory into your project's `.github/agents/` folder (or keep it alongside the skill)
+2. Open VS Code Copilot Chat and select the **JDB Debugger** agent from the agent picker
+3. Describe what you need:
+   - *"Debug the NullPointerException in WarningApp"* → routes to `jdb-session`
+   - *"Collect a thread dump from port 5005"* → routes to `jdb-diagnostics`
+   - *"Analyze this stack trace"* → routes to `jdb-analyst`
 
 ## Quick Start
 

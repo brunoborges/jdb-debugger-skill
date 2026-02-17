@@ -1,6 +1,6 @@
 # JDB Debugger - Claude Code Plugin
 
-A comprehensive debugging plugin for Claude Code that enables AI-powered Java debugging using JDB (Java Debugger).
+A debugging plugin for Claude Code and GitHub Copilot CLI that enables AI-powered Java debugging using JDB (Java Debugger).
 
 ## Overview
 
@@ -46,30 +46,19 @@ The plugin includes a comprehensive skill that teaches Claude how to:
 
 ## Installation
 
-### Option 1: Install from GitHub
+### Claude Code CLI
 
 ```bash
-# In Claude Code chat
-/plugin install github:brunoborges/jdb-agentic-debugger
+# Add the marketplace
+/plugin marketplace add brunoborges/jdb-agentic-debugger
+
+# Install the plugin
+/plugin install jdb-agentic-debugger@jdb-agentic-debugger
 ```
 
-### Option 2: Install from Local Directory
+### GitHub Copilot CLI
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/brunoborges/jdb-agentic-debugger.git
-   ```
-
-2. In Claude Code:
-   - Open Settings > Plugins
-   - Click "Add Local Plugin"
-   - Select the cloned directory
-
-### Option 3: Manual Installation
-
-1. Clone or download the repository
-2. Copy the entire directory to your Claude Code plugins directory
-3. Restart Claude Code
+The `.agent.md` files in `agents/` and the skill in `skills/jdb-debugger/` are compatible with GitHub Copilot coding agent. Copy the `agents/` files into your project's `.github/agents/` folder and use the **JDB Debugger** agent from the Copilot Chat agent picker.
 
 ## Usage
 

@@ -1,6 +1,6 @@
-# Sample App — WarningAppTest
+# Sample App — JDB Testing Application
 
-A simple console application with **intentional bugs** for testing the `jdb-debugger` skill.
+A simple console application with **intentional bugs** for testing the `jdb-debugger` plugin.
 
 ## Build & Run
 

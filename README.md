@@ -4,7 +4,7 @@ An [Agent Skill](https://agentskills.io/specification) that teaches AI agents to
 
 ## Demo
 
-> **[▶ Watch the demo video](docs/demo.mp4)**
+<video src="https://raw.githubusercontent.com/brunoborges/jdb-debugger-skill/main/docs/demo.mp4" controls width="100%"></video>
 
 ## What This Skill Does
 
@@ -19,29 +19,34 @@ When activated, this skill enables AI agents to:
 - **Collect diagnostics** — automated thread dumps and class listings
 - **Bulk set breakpoints** from a file for repeatable debugging sessions
 
-## Skill Structure
+## Repository Structure
 
 ```
-jdb-debugger/
-├── SKILL.md                        # Main skill instructions
-├── agents/
-│   ├── jdb-debugger.agent.md       # Orchestrator — triages and delegates
-│   ├── jdb-session.agent.md        # Interactive debugging sub-agent
-│   ├── jdb-diagnostics.agent.md    # Quick diagnostics sub-agent
-│   └── jdb-analyst.agent.md        # Read-only analysis sub-agent
-├── scripts/
-│   ├── jdb-launch.sh               # Launch a JVM under JDB
-│   ├── jdb-attach.sh               # Attach JDB to a running JVM
-│   ├── jdb-diagnostics.sh          # Collect thread dumps & diagnostics
-│   └── jdb-breakpoints.sh          # Bulk-load breakpoints from a file
-└── references/
-    ├── jdb-commands.md              # Complete JDB command reference
-    └── jdwp-options.md              # JDWP agent configuration options
+├── jdb-debugger-skill/                 # Skill package
+│   ├── SKILL.md                        # Main skill instructions
+│   ├── scripts/
+│   │   ├── jdb-launch.sh              # Launch a JVM under JDB
+│   │   ├── jdb-attach.sh             # Attach JDB to a running JVM
+│   │   ├── jdb-diagnostics.sh        # Collect thread dumps & diagnostics
+│   │   └── jdb-breakpoints.sh        # Bulk-load breakpoints from a file
+│   └── references/
+│       ├── jdb-commands.md            # Complete JDB command reference
+│       └── jdwp-options.md            # JDWP agent configuration options
+├── jdb-debugger-agents/                # Custom agents (VS Code Copilot)
+│   ├── jdb-debugger.agent.md          # Orchestrator — triages and delegates
+│   ├── jdb-session.agent.md           # Interactive debugging sub-agent
+│   ├── jdb-diagnostics.agent.md       # Quick diagnostics sub-agent
+│   └── jdb-analyst.agent.md           # Read-only analysis sub-agent
+├── sample-app/                         # Example Java app for testing
+│   └── src/main/java/com/example/
+│       └── WarningAppTest.java
+└── docs/
+    └── demo.mp4                        # Demo video
 ```
 
 ## Custom Agents
 
-The skill includes a multi-agent chain for orchestrated Java debugging workflows. The agents are defined as `.agent.md` files and can be used with VS Code Copilot's custom agent feature.
+The skill includes a multi-agent chain for orchestrated Java debugging workflows. The agents are defined as `.agent.md` files in the `jdb-debugger-agents/` directory and can be used with VS Code Copilot's custom agent feature.
 
 ### Agent Architecture
 
@@ -61,7 +66,7 @@ User → JDB Debugger (orchestrator)
 
 ### Usage
 
-1. Copy the `agents/` directory into your project's `.github/agents/` folder (or keep it alongside the skill)
+1. Copy the `jdb-debugger-agents/` files into your project's `.github/agents/` folder (or keep them alongside the skill)
 2. Open VS Code Copilot Chat and select the **JDB Debugger** agent from the agent picker
 3. Describe what you need:
    - *"Debug the NullPointerException in WarningAppTest"* → routes to `jdb-session`
@@ -116,7 +121,7 @@ You click: [Debug interactively]
 
   ┌─ jdb-session ─────────────────────────────────────────────────┐
   │ Launches JDB with breakpoints on WarningAppTest using:        │
-  │   bash scripts/jdb-breakpoints.sh                             │
+  │   bash jdb-debugger-skill/scripts/jdb-breakpoints.sh          │
   │     --mainclass com.example.WarningAppTest                    │
   │     --bp "catch java.lang.StringIndexOutOfBoundsException"    │
   │     --bp "stop at com.example.WarningAppTest:43"              │
@@ -136,7 +141,7 @@ You click: [Debug interactively]
 
 ### Use with Claude.ai
 
-Upload the `jdb-debugger/` directory as a custom skill via **Settings > Capabilities**.
+Upload the `jdb-debugger-skill/` directory as a custom skill via **Settings > Capabilities**.
 
 ### Use via API
 
@@ -157,16 +162,16 @@ All scripts support `--help` for full usage details.
 
 ```bash
 # Launch a new JVM under JDB
-bash scripts/jdb-launch.sh com.example.Main --sourcepath src/main/java
+bash jdb-debugger-skill/scripts/jdb-launch.sh com.example.Main --sourcepath src/main/java
 
 # Attach to a running JVM
-bash scripts/jdb-attach.sh --port 5005
+bash jdb-debugger-skill/scripts/jdb-attach.sh --port 5005
 
 # Collect diagnostics
-bash scripts/jdb-diagnostics.sh --port 5005 --output /tmp/diagnostics.txt
+bash jdb-debugger-skill/scripts/jdb-diagnostics.sh --port 5005 --output /tmp/diagnostics.txt
 
 # Load breakpoints from file
-bash scripts/jdb-breakpoints.sh --breakpoints my-breakpoints.txt --port 5005
+bash jdb-debugger-skill/scripts/jdb-breakpoints.sh --breakpoints my-breakpoints.txt --port 5005
 ```
 
 ## Blog Posts & Announcements

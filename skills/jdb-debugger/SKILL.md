@@ -302,7 +302,7 @@ dump dataMap
 - **Suspend mode**: When attaching with `suspend=y`, the JVM pauses until JDB connects. Use `suspend=n` for non-blocking attachment.
 - **Expression evaluation**: `print` and `eval` can call methods on live objects — use with caution in production.
 - **Batch timing**: The batch mode uses configurable delays. Override via env vars:
-  `JDB_BP_DELAY` (default: 2s), `JDB_RUN_DELAY` (3s), `JDB_CMD_DELAY` (0.3s), `JDB_CONT_DELAY` (1s).
+  `JDB_BP_DELAY` (default: 2s), `JDB_RUN_DELAY` (3s), `JDB_CMD_DELAY` (0.5s), `JDB_CONT_DELAY` (1s).
 
 ## Reference Files
 

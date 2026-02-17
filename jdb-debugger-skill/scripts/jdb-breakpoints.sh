@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
-# jdb-breakpoints.sh — Set multiple breakpoints from a file and start a JDB session
+# jdb-breakpoints.sh — Set breakpoints and start a JDB session (interactive or batch)
 set -euo pipefail
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") --breakpoints <file> [options]
+Usage: $(basename "$0") [options]
 
-Launch or attach JDB and automatically set breakpoints defined in a file.
-Each line of the breakpoints file should contain a JDB stop command:
+Launch or attach JDB with breakpoints. Supports both interactive sessions
+and automated batch debugging.
 
-  stop at com.example.MyClass:42
-  stop in com.example.MyClass.myMethod
-  catch java.lang.NullPointerException
-
-Options:
+Breakpoint sources (use one):
   --breakpoints <file>   File containing breakpoint commands (one per line)
+  --bp <command>         Inline breakpoint command (repeatable)
+
+Batch mode (use one, requires --bp or --breakpoints):
+  --auto-inspect <N>     Run N cycles of where+locals+cont, then quit
+  --cmd <command>        JDB command to execute after breakpoints (repeatable)
+
+Connection options:
   --host <hostname>      Attach to host (default: launch mode)
   --port <port>          JDWP port for attach mode (default: 5005)
   --mainclass <class>    Main class for launch mode
@@ -22,12 +25,26 @@ Options:
   --classpath <path>     Classpath for launch mode
   -h, --help             Show this help message
 
-Examples:
-  # Attach with breakpoints
-  $(basename "$0") --breakpoints breakpoints.txt --port 5005
+Environment variables for batch timing:
+  JDB_BP_DELAY    Delay after each breakpoint command (default: 2)
+  JDB_RUN_DELAY   Delay after 'run' command (default: 3)
+  JDB_CMD_DELAY   Delay after each --cmd command (default: 0.5)
+  JDB_CONT_DELAY  Delay after 'cont' command in --auto-inspect (default: 1)
 
-  # Launch with breakpoints
-  $(basename "$0") --breakpoints breakpoints.txt --mainclass com.example.Main
+Examples:
+  # Interactive with breakpoints file
+  $(basename "$0") --breakpoints bp.txt --mainclass com.example.Main
+
+  # Batch: inline breakpoints + auto-inspect
+  $(basename "$0") --mainclass com.example.Main \\
+    --bp "stop in com.example.Main.process" \\
+    --bp "catch java.lang.NullPointerException" \\
+    --auto-inspect 10
+
+  # Batch: inline breakpoints + custom commands
+  $(basename "$0") --mainclass com.example.Main \\
+    --bp "stop in com.example.Main.process" \\
+    --cmd "run" --cmd "locals" --cmd "cont" --cmd "quit"
 
 EOF
   exit 0
@@ -39,6 +56,9 @@ PORT="5005"
 MAINCLASS=""
 SOURCEPATH=""
 CLASSPATH_ARG=""
+AUTO_INSPECT=""
+declare -a BP_ARGS=()
+declare -a CMD_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -47,6 +67,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --breakpoints)
       BREAKPOINTS_FILE="$2"
+      shift 2
+      ;;
+    --bp)
+      BP_ARGS+=("$2")
+      shift 2
+      ;;
+    --cmd)
+      CMD_ARGS+=("$2")
+      shift 2
+      ;;
+    --auto-inspect)
+      AUTO_INSPECT="$2"
       shift 2
       ;;
     --host)
@@ -76,13 +108,27 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$BREAKPOINTS_FILE" ]]; then
-  echo "Error: --breakpoints file is required."
+# Validate: need either --breakpoints or --bp
+if [[ -z "$BREAKPOINTS_FILE" && ${#BP_ARGS[@]} -eq 0 ]]; then
+  echo "Error: --breakpoints <file> or --bp <command> is required."
   echo ""
   usage
 fi
 
-if [[ ! -f "$BREAKPOINTS_FILE" ]]; then
+# Validate: --breakpoints and --bp are mutually exclusive
+if [[ -n "$BREAKPOINTS_FILE" && ${#BP_ARGS[@]} -gt 0 ]]; then
+  echo "Error: --breakpoints and --bp are mutually exclusive. Use one or the other."
+  exit 1
+fi
+
+# Validate: --auto-inspect and --cmd are mutually exclusive
+if [[ -n "$AUTO_INSPECT" && ${#CMD_ARGS[@]} -gt 0 ]]; then
+  echo "Error: --auto-inspect and --cmd are mutually exclusive. Use one or the other."
+  exit 1
+fi
+
+# Validate breakpoints file exists if specified
+if [[ -n "$BREAKPOINTS_FILE" && ! -f "$BREAKPOINTS_FILE" ]]; then
   echo "Error: Breakpoints file not found: $BREAKPOINTS_FILE"
   exit 1
 fi
@@ -93,23 +139,25 @@ if ! command -v jdb &>/dev/null; then
   exit 1
 fi
 
-# Read breakpoints and build initialization commands
+# Build breakpoint commands
 INIT_CMDS=""
-while IFS= read -r line; do
-  # Skip empty lines and comments
-  [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-  INIT_CMDS+="${line}\n"
-done < "$BREAKPOINTS_FILE"
+if [[ -n "$BREAKPOINTS_FILE" ]]; then
+  while IFS= read -r line; do
+    # Skip empty lines and comments
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    INIT_CMDS+="${line}\n"
+  done < "$BREAKPOINTS_FILE"
+else
+  for bp in "${BP_ARGS[@]}"; do
+    INIT_CMDS+="${bp}\n"
+  done
+fi
 
 BP_COUNT=$(echo -e "$INIT_CMDS" | grep -c -E '^(stop|catch)' || true)
 echo "=== JDB Breakpoints ==="
-echo "Loaded $BP_COUNT breakpoint/catch commands from: $BREAKPOINTS_FILE"
+echo "Loaded $BP_COUNT breakpoint/catch commands"
 echo "========================"
 echo ""
-
-# Create temp file for JDB input (breakpoints first, then interactive)
-TMPFILE=$(mktemp /tmp/jdb-bp-XXXXXX.txt)
-printf "$INIT_CMDS" > "$TMPFILE"
 
 # Build jdb command
 if [[ -n "$HOST" || -z "$MAINCLASS" ]]; then
@@ -125,11 +173,70 @@ fi
 
 [[ -n "$SOURCEPATH" ]] && CMD="$CMD -sourcepath ${SOURCEPATH}"
 
-echo "Setting breakpoints and starting JDB..."
-echo ""
+# Determine mode: batch (--auto-inspect or --cmd) vs interactive
+IS_BATCH=false
+if [[ -n "$AUTO_INSPECT" || ${#CMD_ARGS[@]} -gt 0 ]]; then
+  IS_BATCH=true
+fi
 
-# Feed breakpoints then hand control to the terminal
-(cat "$TMPFILE"; cat) | $CMD
+if [[ "$IS_BATCH" == true ]]; then
+  # Batch mode: use subshell with sleep delays piped to jdb
+  BP_DELAY="${JDB_BP_DELAY:-2}"
+  RUN_DELAY="${JDB_RUN_DELAY:-3}"
+  CMD_DELAY="${JDB_CMD_DELAY:-0.5}"
+  CONT_DELAY="${JDB_CONT_DELAY:-1}"
 
-# Cleanup
-rm -f "$TMPFILE"
+  echo "Running in batch mode..."
+  echo ""
+
+  (
+    # Send breakpoint commands
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      echo "$line"
+      sleep "$BP_DELAY"
+    done < <(echo -e "$INIT_CMDS")
+
+    if [[ -n "$AUTO_INSPECT" ]]; then
+      # Auto-inspect mode: run + N cycles of where/locals/cont + quit
+      echo "run"
+      sleep "$RUN_DELAY"
+
+      for ((i = 1; i <= AUTO_INSPECT; i++)); do
+        echo "where"
+        sleep "$CMD_DELAY"
+        echo "locals"
+        sleep "$CMD_DELAY"
+        echo "cont"
+        sleep "$CONT_DELAY"
+      done
+
+      echo "quit"
+    else
+      # Custom commands mode
+      for cmd_arg in "${CMD_ARGS[@]}"; do
+        echo "$cmd_arg"
+        if [[ "$cmd_arg" == "run" ]]; then
+          sleep "$RUN_DELAY"
+        elif [[ "$cmd_arg" == "cont" ]]; then
+          sleep "$CONT_DELAY"
+        else
+          sleep "$CMD_DELAY"
+        fi
+      done
+    fi
+  ) | $CMD
+
+else
+  # Interactive mode: feed breakpoints then hand control to terminal
+  TMPFILE=$(mktemp /tmp/jdb-bp-XXXXXX.txt)
+  printf "$INIT_CMDS" > "$TMPFILE"
+
+  echo "Setting breakpoints and starting JDB..."
+  echo ""
+
+  (cat "$TMPFILE"; cat) | $CMD
+
+  # Cleanup
+  rm -f "$TMPFILE"
+fi

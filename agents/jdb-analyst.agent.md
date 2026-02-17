@@ -1,7 +1,7 @@
 ---
 description: "Analyze Java stack traces, thread dumps, diagnostic output, and logs. Use when the user has debugging output that needs interpretation, root cause analysis, or explanation. Read-only — does not run commands."
 name: "jdb-analyst"
-tools: ["read", "search", "web"]
+tools: ["read", "search"]
 user-invocable: false
 ---
 

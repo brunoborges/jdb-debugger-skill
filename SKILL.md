@@ -12,6 +12,46 @@ metadata:
 
 Debug Java applications interactively using the JDK's built-in command-line debugger.
 
+## Critical Rules for Agents
+
+1. **NEVER create files in the workspace** (no `bp.txt`, `cmds.txt`, wrapper scripts, etc.).
+   Use the inline CLI flags (`--bp`, `--cmd`, `--auto-inspect`) provided by the skill scripts.
+2. **ALWAYS use the skill scripts** in `scripts/`. Never write
+   custom JDB wrapper scripts, FIFO-based launchers, or shell scripts to drive JDB.
+3. **Compile first, then debug.** Ensure classes are compiled before launching JDB.
+4. **On Windows, invoke scripts via WSL:** `wsl bash scripts/<script>.sh`
+
+## Platform Support
+
+### Windows (WSL Required)
+
+The scripts in this skill are Bash scripts. On Windows, invoke them via WSL:
+
+```bash
+wsl bash scripts/jdb-launch.sh com.example.MyApp --sourcepath src/main/java
+```
+
+If your compiled classes are on the Windows filesystem, WSL accesses them via `/mnt/c/`:
+```bash
+wsl bash scripts/jdb-launch.sh com.example.MyApp --classpath /mnt/c/Users/you/project/out
+```
+
+Ensure JDK is installed in WSL:
+```bash
+# Ubuntu/Debian WSL
+sudo apt update && sudo apt install -y default-jdk
+
+# Verify
+which jdb && jdb -version
+```
+
+### Linux / macOS
+
+Scripts run natively. Ensure JDK is installed and `jdb` is on PATH:
+```bash
+export PATH=$JAVA_HOME/bin:$PATH
+```
+
 ## Decision Tree
 
 ```
@@ -177,19 +217,29 @@ exit                  # Same as quit
 
 ## Debugging Workflow Patterns
 
-### Pattern 1: Investigate a NullPointerException
+### Pattern 1: Investigate a NullPointerException (automated batch mode)
 
+Use inline `--bp` flags and `--auto-inspect` — no files needed:
+```bash
+bash scripts/jdb-breakpoints.sh \
+  --mainclass com.example.MyClass \
+  --bp "catch java.lang.NullPointerException" \
+  --bp "stop at com.example.MyClass:42" \
+  --bp "stop in com.example.MyClass.processMessage" \
+  --auto-inspect 20
 ```
-# 1. Catch the exception
-catch java.lang.NullPointerException
 
-# 2. Continue execution until it's thrown
-cont
+The `--auto-inspect 20` flag automatically generates `run` + 20 cycles of
+`where`, `locals`, `cont` + `quit`. The output contains the full JDB session
+including stack traces, local variables, and exception details — ready for analysis.
 
-# 3. When it breaks, inspect the stack and locals
-where
-locals
-print suspiciousVariable
+For custom commands, use `--cmd` flags instead of `--auto-inspect`:
+```bash
+bash scripts/jdb-breakpoints.sh \
+  --mainclass com.example.MyClass \
+  --bp "catch java.lang.NullPointerException" \
+  --cmd "run" --cmd "where" --cmd "locals" --cmd "print myVar" --cmd "cont" \
+  --cmd "where" --cmd "locals" --cmd "cont" --cmd "quit"
 ```
 
 ### Pattern 2: Watch a method's behavior
@@ -240,12 +290,19 @@ dump dataMap
 
 ## Important Notes
 
+- **NEVER create files in the workspace.** Use inline `--bp`, `--cmd`, and `--auto-inspect`
+  flags. The scripts handle all temp files internally in `/tmp/` and clean up after themselves.
+- **Compile with `-g` for full debug info.** Without it, `locals` will show
+  "Local variable information not available". Always compile with:
+  `javac -g -d out src/main/java/com/example/MyClass.java`
 - **JDB is line-oriented**: Send one command at a time and read the output before the next command.
 - **Source path**: Use `-sourcepath` or `use` command so `list` can show source code.
 - **Classpath**: Ensure compiled classes are accessible for expression evaluation.
 - **Thread context**: Many commands operate on the "current thread". Use `thread` to switch.
 - **Suspend mode**: When attaching with `suspend=y`, the JVM pauses until JDB connects. Use `suspend=n` for non-blocking attachment.
 - **Expression evaluation**: `print` and `eval` can call methods on live objects — use with caution in production.
+- **Batch timing**: The batch mode uses configurable delays. Override via env vars:
+  `JDB_BP_DELAY` (default: 2s), `JDB_RUN_DELAY` (3s), `JDB_CMD_DELAY` (0.3s), `JDB_CONT_DELAY` (1s).
 
 ## Reference Files
 

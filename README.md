@@ -4,7 +4,7 @@ An [Agent Skill](https://agentskills.io/specification) that teaches AI agents to
 
 ## Demo
 
-<video src="https://raw.githubusercontent.com/brunoborges/jdb-debugger-skill/main/docs/demo.mp4" controls width="100%"></video>
+<video src="https://raw.githubusercontent.com/brunoborges/jdb-agentic-debugger/main/docs/demo.mp4" controls width="100%"></video>
 
 ## What This Skill Does
 

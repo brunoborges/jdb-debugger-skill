@@ -149,4 +149,4 @@ bash skills/jdb-debugger/scripts/jdb-breakpoints.sh --breakpoints my-breakpoints
 
 ## License
 
-Apache-2.0
+MIT

@@ -1,6 +1,6 @@
 # Sample App — JDB Testing Application
 
-A simple console application with **intentional bugs** for testing the `jdb-debugger` plugin.
+A simple console application with **intentional bugs** for testing the `jdb-agentic-debugger` plugin.
 
 ## Build & Run
 

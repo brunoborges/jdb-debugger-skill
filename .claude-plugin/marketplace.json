@@ -19,7 +19,7 @@
       },
       "homepage": "https://github.com/brunoborges/jdb-agentic-debugger",
       "repository": "https://github.com/brunoborges/jdb-agentic-debugger",
-      "license": "Apache-2.0",
+      "license": "MIT",
       "keywords": ["java", "jdb", "debugger", "jvm", "jdwp", "debugging", "breakpoints"],
       "category": "development"
     }

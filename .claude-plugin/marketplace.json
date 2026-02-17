@@ -8,7 +8,10 @@
   "plugins": [
     {
       "name": "jdb-agentic-debugger",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "brunoborges/jdb-agentic-debugger"
+      },
       "description": "Debug Java applications in real time using JDB. Launch JVMs under JDB, attach to running processes, set breakpoints, step through code, inspect variables, analyze threads, and diagnose exceptions.",
       "version": "1.0.0",
       "author": {

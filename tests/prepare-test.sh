@@ -30,6 +30,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/test-helpers.sh"
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -45,86 +46,23 @@ fail() { echo -e "${RED}[ERR]${NC}  $*"; }
 # ─────────────────────────────────────────────
 # Verify prerequisites
 # ─────────────────────────────────────────────
-if ! command -v javac &>/dev/null; then
-  fail "javac not found. Install a JDK."
-  exit 1
-fi
-
-SAMPLE_FILES=(
-  "WarningAppTest.java"
-  "ConsoleAppTest.java"
-  "AliasingCorruptionTest.java"
-  "ClassLoaderConflictTest.java"
-  "ThreadTest.java"
-  "VisibilityTest.java"
-)
-
-SOURCE_PATHS=()
-for sample in "${SAMPLE_FILES[@]}"; do
-  src="$REPO_ROOT/tests/samples/$sample"
-  if [[ ! -f "$src" ]]; then
-    fail "Sample source not found: $src"
-    exit 1
-  fi
-  SOURCE_PATHS+=("$src")
-done
+check_javac
+resolve_sources
 
 # ─────────────────────────────────────────────
 # Create work directory
 # ─────────────────────────────────────────────
-_tmpbase="${TMPDIR:-/tmp}"
-WORKDIR=$(mktemp -d "${_tmpbase%/}/jdb-test-XXXXXX")
+WORKDIR=$(make_temp_dir)
 
 log "Creating test directory: $WORKDIR"
 
-# Compile sample app
 log "Compiling sample app with debug symbols..."
-mkdir -p "$WORKDIR/classes"
-javac -g -d "$WORKDIR/classes" "${SOURCE_PATHS[@]}"
+compile_samples "$WORKDIR"
 
 if [[ "$NO_PLUGIN" == false ]]; then
-  # Plugin descriptor
-  mkdir -p "$WORKDIR/.claude-plugin"
-  cp "$REPO_ROOT/.claude-plugin/plugin.json" "$WORKDIR/.claude-plugin/"
-
-  # Agents
-  cp -r "$REPO_ROOT/agents" "$WORKDIR/agents"
-
-  # Skill scripts
-  mkdir -p "$WORKDIR/skills/jdb-debugger/scripts"
-  cp "$REPO_ROOT/skills/jdb-debugger/scripts/"*.sh "$WORKDIR/skills/jdb-debugger/scripts/"
-  chmod +x "$WORKDIR/skills/jdb-debugger/scripts/"*.sh
-
-  # Skill documentation
-  cp "$REPO_ROOT/skills/jdb-debugger/SKILL.md" "$WORKDIR/skills/jdb-debugger/"
-
-  # References (if they exist)
-  if [[ -d "$REPO_ROOT/skills/jdb-debugger/references" ]]; then
-    cp -r "$REPO_ROOT/skills/jdb-debugger/references" "$WORKDIR/skills/jdb-debugger/"
-  fi
-
-  # Permissions (for Claude)
-  mkdir -p "$WORKDIR/.claude"
-  cat > "$WORKDIR/.claude/settings.local.json" <<'SETTINGS'
-{
-  "permissions": {
-    "allow": [
-      "Bash(javac:*)",
-      "Bash(java:*)",
-      "Bash(jdb:*)",
-      "Bash(JDB_BP_DELAY=*)",
-      "Bash(bash:*)",
-      "Bash(cat:*)",
-      "Bash(ls:*)",
-      "Bash(find:*)",
-      "Edit",
-      "Read",
-      "Write"
-    ]
-  }
-}
-SETTINGS
+  install_plugin "$WORKDIR"
 fi
+install_permissions "$WORKDIR"
 
 # ─────────────────────────────────────────────
 # Copy prompt.txt

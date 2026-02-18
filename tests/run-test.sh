@@ -17,6 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/test-helpers.sh"
 
 # --- Timing & Report ---
 TEST_START_EPOCH=$(date +%s)
@@ -124,10 +125,7 @@ separator() {
 # ─────────────────────────────────────────────
 log "Checking prerequisites..."
 
-if ! command -v javac &>/dev/null; then
-  fail "javac not found. Install a JDK."
-  exit 1
-fi
+check_javac
 
 HAS_CLAUDE=false
 HAS_COPILOT=false
@@ -158,27 +156,9 @@ log "Agents to test: ${AGENTS[*]}"
 # ─────────────────────────────────────────────
 # Compile .java → .class (with debug symbols)
 # ─────────────────────────────────────────────
-SAMPLE_FILES=(
-  "WarningAppTest.java"
-  "ConsoleAppTest.java"
-  "AliasingCorruptionTest.java"
-  "ClassLoaderConflictTest.java"
-  "ThreadTest.java"
-  "VisibilityTest.java"
-)
+resolve_sources
 
-SOURCE_PATHS=()
-for sample in "${SAMPLE_FILES[@]}"; do
-  src="$REPO_ROOT/tests/samples/$sample"
-  if [[ ! -f "$src" ]]; then
-    fail "Sample source not found: $src"
-    exit 1
-  fi
-  SOURCE_PATHS+=("$src")
-done
-
-_tmpbase="${TMPDIR:-/tmp}"
-BASE_WORKDIR=$(mktemp -d "${_tmpbase%/}/jdb-test-XXXXXX")
+BASE_WORKDIR=$(make_temp_dir)
 log "Base work directory: $BASE_WORKDIR"
 
 cleanup() {
@@ -192,8 +172,7 @@ cleanup() {
 trap cleanup EXIT
 
 log "Compiling sample app with debug symbols..."
-mkdir -p "$BASE_WORKDIR/classes"
-javac -g -d "$BASE_WORKDIR/classes" "${SOURCE_PATHS[@]}"
+compile_samples "$BASE_WORKDIR"
 
 # ─────────────────────────────────────────────
 # Shared prompt (read from prompt.txt)
@@ -307,48 +286,9 @@ setup_workdir() {
   cp -r "$BASE_WORKDIR/classes" "$workdir/classes"
 
   if [[ "$NO_PLUGIN" == false ]]; then
-    # Plugin descriptor
-    mkdir -p "$workdir/.claude-plugin"
-    cp "$REPO_ROOT/.claude-plugin/plugin.json" "$workdir/.claude-plugin/"
-
-    # Agents
-    cp -r "$REPO_ROOT/agents" "$workdir/agents"
-
-    # Skill scripts
-    mkdir -p "$workdir/skills/jdb-debugger/scripts"
-    cp "$REPO_ROOT/skills/jdb-debugger/scripts/"*.sh "$workdir/skills/jdb-debugger/scripts/"
-    chmod +x "$workdir/skills/jdb-debugger/scripts/"*.sh
-
-    # Skill documentation
-    cp "$REPO_ROOT/skills/jdb-debugger/SKILL.md" "$workdir/skills/jdb-debugger/"
-
-    # References (if they exist)
-    if [[ -d "$REPO_ROOT/skills/jdb-debugger/references" ]]; then
-      cp -r "$REPO_ROOT/skills/jdb-debugger/references" "$workdir/skills/jdb-debugger/"
-    fi
+    install_plugin "$workdir"
   fi
-
-  # Permissions (used by claude; copilot uses --allow-all)
-  mkdir -p "$workdir/.claude"
-  cat > "$workdir/.claude/settings.local.json" <<'SETTINGS'
-{
-  "permissions": {
-    "allow": [
-      "Bash(javac:*)",
-      "Bash(java:*)",
-      "Bash(jdb:*)",
-      "Bash(JDB_BP_DELAY=*)",
-      "Bash(bash:*)",
-      "Bash(cat:*)",
-      "Bash(ls:*)",
-      "Bash(find:*)",
-      "Edit",
-      "Read",
-      "Write"
-    ]
-  }
-}
-SETTINGS
+  install_permissions "$workdir"
 
   echo "$workdir"
 }

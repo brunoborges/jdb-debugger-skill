@@ -50,16 +50,24 @@ if ! command -v javac &>/dev/null; then
   exit 1
 fi
 
-SAMPLE_SRC="$REPO_ROOT/tests/samples/WarningAppTest.java"
-CONSOLE_SRC="$REPO_ROOT/tests/samples/ConsoleAppTest.java"
-if [[ ! -f "$SAMPLE_SRC" ]]; then
-  fail "Sample source not found: $SAMPLE_SRC"
-  exit 1
-fi
-if [[ ! -f "$CONSOLE_SRC" ]]; then
-  fail "Sample source not found: $CONSOLE_SRC"
-  exit 1
-fi
+SAMPLE_FILES=(
+  "WarningAppTest.java"
+  "ConsoleAppTest.java"
+  "AliasingCorruptionTest.java"
+  "ClassLoaderConflictTest.java"
+  "ThreadTest.java"
+  "VisibilityTest.java"
+)
+
+SOURCE_PATHS=()
+for sample in "${SAMPLE_FILES[@]}"; do
+  src="$REPO_ROOT/tests/samples/$sample"
+  if [[ ! -f "$src" ]]; then
+    fail "Sample source not found: $src"
+    exit 1
+  fi
+  SOURCE_PATHS+=("$src")
+done
 
 # ─────────────────────────────────────────────
 # Create work directory
@@ -72,7 +80,7 @@ log "Creating test directory: $WORKDIR"
 # Compile sample app
 log "Compiling sample app with debug symbols..."
 mkdir -p "$WORKDIR/classes"
-javac -g -d "$WORKDIR/classes" "$SAMPLE_SRC" "$CONSOLE_SRC"
+javac -g -d "$WORKDIR/classes" "${SOURCE_PATHS[@]}"
 
 if [[ "$NO_PLUGIN" == false ]]; then
   # Plugin descriptor

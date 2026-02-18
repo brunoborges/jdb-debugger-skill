@@ -1,8 +1,8 @@
-You are investigating Java applications that users have reported contain multiple bugs.
+You are investigating Java applications that users have reported contain are not working properly.
 
 ## Context
 - The compiled applications are in the `classes/` directory.
-- Test all of the following classes (default package):
+- Test all of the following classes:
   1. `WarningAppTest` — run with: `java -cp classes WarningAppTest`
   2. `ConsoleAppTest` — run with: `java -cp classes ConsoleAppTest "PREMIUM\t"`
   3. `AliasingCorruptionTest` — run with: `java -cp classes AliasingCorruptionTest`
@@ -11,7 +11,8 @@ You are investigating Java applications that users have reported contain multipl
   6. `VisibilityTest` — run with: `java -cp classes VisibilityTest`
 - You do NOT have access to the source code. 
 - Compile commands are not needed.
-- Do NOT use `javap` or any bytecode disassembly tools to inspect the classes. You MUST debug the application to investigate runtime behavior.
+- Do NOT use `javap` or any bytecode disassembly tools to inspect the classes. 
+- You MUST debug the application to investigate runtime behavior.
 
 ## Your Task
 1. Run each application first to observe its behavior.
@@ -27,4 +28,5 @@ The report MUST include a section for each bug found with:
 - The root cause explanation
 - Suggested fix
 
-Find ALL bugs across all listed applications. There are multiple bugs to discover.
+Find as many bugs as you can across all listed applications.
+There are multiple bugs to discover.

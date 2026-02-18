@@ -8,7 +8,7 @@
 # By default, runs whichever CLIs are available. Use --agent to run one.
 #
 # Usage:
-#   ./tests/run-test.sh [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--allow-all] [--verbose]
+#   ./tests/run-test.sh [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--allow-all] [--no-plugin] [--verbose]
 #
 # Prerequisites:
 #   - JDK with javac and jdb on PATH
@@ -30,9 +30,10 @@ REPORT_FILES=()
 # --- Defaults ---
 AGENT_FILTER="all"
 MODEL=""
-MAX_BUDGET="5.00"
+MAX_BUDGET="25.00"
 VERBOSE=false
 ALLOW_ALL=false
+NO_PLUGIN=false
 
 # --- Parse args ---
 while [[ $# -gt 0 ]]; do
@@ -42,8 +43,9 @@ while [[ $# -gt 0 ]]; do
     --max-budget) MAX_BUDGET="$2"; shift 2 ;;
     --verbose)  VERBOSE=true; shift ;;
     --allow-all) ALLOW_ALL=true; shift ;;
+    --no-plugin) NO_PLUGIN=true; shift ;;
     -h|--help)
-      echo "Usage: $0 [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--allow-all] [--verbose]"
+      echo "Usage: $0 [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--allow-all] [--no-plugin] [--verbose]"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -304,24 +306,26 @@ setup_workdir() {
   # Compiled classes
   cp -r "$BASE_WORKDIR/classes" "$workdir/classes"
 
-  # Plugin descriptor
-  mkdir -p "$workdir/.claude-plugin"
-  cp "$REPO_ROOT/.claude-plugin/plugin.json" "$workdir/.claude-plugin/"
+  if [[ "$NO_PLUGIN" == false ]]; then
+    # Plugin descriptor
+    mkdir -p "$workdir/.claude-plugin"
+    cp "$REPO_ROOT/.claude-plugin/plugin.json" "$workdir/.claude-plugin/"
 
-  # Agents
-  cp -r "$REPO_ROOT/agents" "$workdir/agents"
+    # Agents
+    cp -r "$REPO_ROOT/agents" "$workdir/agents"
 
-  # Skill scripts
-  mkdir -p "$workdir/skills/jdb-debugger/scripts"
-  cp "$REPO_ROOT/skills/jdb-debugger/scripts/"*.sh "$workdir/skills/jdb-debugger/scripts/"
-  chmod +x "$workdir/skills/jdb-debugger/scripts/"*.sh
+    # Skill scripts
+    mkdir -p "$workdir/skills/jdb-debugger/scripts"
+    cp "$REPO_ROOT/skills/jdb-debugger/scripts/"*.sh "$workdir/skills/jdb-debugger/scripts/"
+    chmod +x "$workdir/skills/jdb-debugger/scripts/"*.sh
 
-  # Skill documentation
-  cp "$REPO_ROOT/skills/jdb-debugger/SKILL.md" "$workdir/skills/jdb-debugger/"
+    # Skill documentation
+    cp "$REPO_ROOT/skills/jdb-debugger/SKILL.md" "$workdir/skills/jdb-debugger/"
 
-  # References (if they exist)
-  if [[ -d "$REPO_ROOT/skills/jdb-debugger/references" ]]; then
-    cp -r "$REPO_ROOT/skills/jdb-debugger/references" "$workdir/skills/jdb-debugger/"
+    # References (if they exist)
+    if [[ -d "$REPO_ROOT/skills/jdb-debugger/references" ]]; then
+      cp -r "$REPO_ROOT/skills/jdb-debugger/references" "$workdir/skills/jdb-debugger/"
+    fi
   fi
 
   # Permissions (used by claude; copilot uses --allow-all)
@@ -362,13 +366,17 @@ run_claude() {
   log "Work directory: $workdir"
   log "Model: ${MODEL:-default}"
   log "Max budget: \$${MAX_BUDGET}"
+  log "Plugin mode: $([[ "$NO_PLUGIN" == true ]] && echo "disabled (--no-plugin)" || echo "enabled")"
 
   local claude_args=(
     --print
-    --plugin-dir "$workdir"
     --max-budget-usd "$MAX_BUDGET"
     --no-session-persistence
   )
+
+  if [[ "$NO_PLUGIN" == false ]]; then
+    claude_args+=(--plugin-dir "$workdir")
+  fi
 
   if [[ "$ALLOW_ALL" == true ]]; then
     claude_args+=(--dangerously-skip-permissions)

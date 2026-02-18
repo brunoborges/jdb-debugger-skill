@@ -1,64 +1,129 @@
-# Sample App — JDB Testing Application
+# Sample App — JDB Debugging Playground
 
-A simple console application with **intentional bugs** for testing the `jdb-agentic-debugger` plugin.
+This folder contains intentionally buggy Java programs designed for debugger-driven investigation with `jdb-agentic-debugger`.
 
-## Build & Run
+All classes are in the **default package**.
+
+## Files
+
+- `WarningAppTest.java` — multi-scenario bug demo (null handling, bounds, off-by-one, state corruption)
+- `ConsoleAppTest.java` — simple branch/lookup demo for step-through practice
+- `VisibilityTest.java` — Java Memory Model visibility bug (`volatile` missing)
+- `DeadlockTest.java` — deterministic two-thread deadlock
+- `ClassLoaderConflictTest.java` — same class name, different class loaders (`X cannot be cast to X`)
+- `AliasingCorruptionTest.java` — data corruption from mutable object aliasing
+
+## Compile
+
+From `tests/samples/`:
 
 ```bash
-cd sample-app
-
-# Compile
-javac -g -d out WarningAppTest.java
-javac -g -d out ConsoleAppTest.java
-
-# Run normally
-java -cp out com.example.WarningAppTest
-java -cp out com.example.ConsoleAppTest BASIC
-
-# Run with JDWP for remote debugging
-java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out com.example.WarningAppTest
-java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out com.example.ConsoleAppTest BASIC
+mkdir -p out
+javac -g -d out WarningAppTest.java ConsoleAppTest.java VisibilityTest.java DeadlockTest.java ClassLoaderConflictTest.java
+javac -g -d out AliasingCorruptionTest.java
 ```
 
-## Sample Apps
+## Quick Run
 
-### WarningAppTest (Swing GUI)
+```bash
+java -cp out WarningAppTest
+java -cp out ConsoleAppTest BASIC
+java -cp out VisibilityTest
+java -cp out DeadlockTest
+java -cp out ClassLoaderConflictTest
+java -cp out AliasingCorruptionTest
+```
 
-A Swing application with **intentional bugs** for testing the `jdb-agentic-debugger` plugin.
+## Run with JDWP (attach debugger)
 
-#### Intentional Bugs
+Use one test per terminal session (all default to port `5005`):
 
-| # | Bug | How to Trigger | Expected Symptom |
-|---|-----|----------------|------------------|
-| 1 | `NullPointerException` | Click "Show Warning" with empty input | `processMessage` returns `null`, then `showWarning` passes it to `JOptionPane` |
-| 2 | Off-by-one counter | Click "Show Warning" with any text | Counter always shows one less than actual |
-| 3 | `NullPointerException` after clear | Click "Clear History", then "Show Warning" | `warningHistory` is set to `null` instead of cleared |
-| 4 | `StringIndexOutOfBoundsException` | Enter text shorter than 3 characters (e.g., "Hi") | `substring(0, 3)` on a 2-char string |
+```bash
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out WarningAppTest
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out ConsoleAppTest BASIC
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out VisibilityTest
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out DeadlockTest
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out ClassLoaderConflictTest
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out AliasingCorruptionTest
+```
 
-## Debugging Exercises
+## What Each Demo Teaches
 
 ### WarningAppTest
 
-Use the `jdb-debugger` skill to:
+Scenarios are executed in sequence from `main`:
 
-1. **Catch the NPE**: `catch java.lang.NullPointerException`, then trigger bug #1
-2. **Watch the counter**: Set `stop at com.example.WarningAppTest:50` and inspect `warningCount`
-3. **Find the memory leak**: Set breakpoint in `clearHistory()` and inspect `warningHistory`
-4. **Catch bounds error**: `catch java.lang.StringIndexOutOfBoundsException`, enter "Hi"
+1. Normal input shows off-by-one counter output
+2. Empty input triggers `StringIndexOutOfBoundsException`
+3. Short input triggers `StringIndexOutOfBoundsException`
+4. Clear then show triggers `NullPointerException` from corrupted history state
+5. Null input triggers `NullPointerException` in `message.trim()`
+
+Use this for breakpoint placement, exception catchpoints, and state inspection across multiple failures.
 
 ### ConsoleAppTest
 
-A simple console application that looks up discount percentages by membership tier (`BASIC`, `PREMIUM`, `VIP`). Defaults to 0% for unknown tiers.
+Tier-to-discount lookup (`BASIC`, `PREMIUM`, `VIP`) with default `0%` for unknown tier.
+
+Examples:
 
 ```bash
-java -cp out com.example.ConsoleAppTest BASIC      # Discount = 5%
-java -cp out com.example.ConsoleAppTest VIP        # Discount = 30%
-java -cp out com.example.ConsoleAppTest UNKNOWN    # Discount = 0%
-java -cp out com.example.ConsoleAppTest            # Usage message
+java -cp out ConsoleAppTest BASIC
+java -cp out ConsoleAppTest VIP
+java -cp out ConsoleAppTest UNKNOWN
+java -cp out ConsoleAppTest
 ```
 
-Use the `jdb-debugger` skill to:
+Use this for basic stepping and variable inspection.
 
-1. **Inspect the map**: Set `stop at com.example.ConsoleAppTest:20` and inspect the `discounts` map
-2. **Trace the lookup**: Step through the `discounts.get(tier)` call and inspect `discount`
-3. **Test null handling**: Run with an unknown tier and verify the null check at line 22
+### VisibilityTest (runtime-only class of bug)
+
+Demonstrates a visibility issue using a non-`volatile` shared flag (`stopRequested`).
+
+Why debugger helps: static reading is insufficient to prove a failing inter-thread observation on a given run.
+
+Debug focus:
+- Compare `stopRequested` and `counter` across threads
+- Inspect worker thread state after `join(1000)`
+
+### DeadlockTest (runtime-only class of bug)
+
+Two threads acquire locks in opposite order and deadlock.
+
+Why debugger helps: lock ownership and wait graph are runtime properties.
+
+Debug focus:
+- Inspect thread states and monitor ownership
+- Confirm circular wait between `deadlock-t1` and `deadlock-t2`
+
+### ClassLoaderConflictTest (runtime-only class of bug)
+
+Loads the same binary name through two isolated class loaders and forces cast failure.
+
+Why debugger helps: class identity includes class loader, not only class name.
+
+Debug focus:
+- Compare `classA.getClassLoader()` vs `classB.getClassLoader()`
+- Inspect runtime type identity during cast
+
+### AliasingCorruptionTest
+
+Demonstrates data corruption by reusing one mutable object (`OrderLine`) while adding it multiple times to a list.
+
+Why debugger helps: runtime object identity reveals that all rows reference the same instance, even though the output appears to be separate records.
+
+Debug focus:
+- Inspect object identity (`System.identityHashCode`) for each list entry
+- Watch `reused.product` and `reused.quantity` across loop iterations
+- Confirm all list slots reference the same `OrderLine` object
+
+## Suggested JDB Commands
+
+```text
+threads
+where all
+catch java.lang.NullPointerException
+catch java.lang.StringIndexOutOfBoundsException
+```
+
+For single-step sessions, launch with one test class and set breakpoints by line in the corresponding file.

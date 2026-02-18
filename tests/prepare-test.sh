@@ -50,8 +50,8 @@ if ! command -v javac &>/dev/null; then
   exit 1
 fi
 
-SAMPLE_SRC="$REPO_ROOT/sample-app/WarningAppTest.java"
-CONSOLE_SRC="$REPO_ROOT/sample-app/ConsoleAppTest.java"
+SAMPLE_SRC="$REPO_ROOT/tests/samples/WarningAppTest.java"
+CONSOLE_SRC="$REPO_ROOT/tests/samples/ConsoleAppTest.java"
 if [[ ! -f "$SAMPLE_SRC" ]]; then
   fail "Sample source not found: $SAMPLE_SRC"
   exit 1

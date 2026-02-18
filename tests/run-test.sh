@@ -8,7 +8,7 @@
 # By default, runs whichever CLIs are available. Use --agent to run one.
 #
 # Usage:
-#   ./tests/run-test.sh [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--verbose]
+#   ./tests/run-test.sh [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--allow-all] [--verbose]
 #
 # Prerequisites:
 #   - JDK with javac and jdb on PATH
@@ -18,11 +18,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# --- Timing & Report ---
+TEST_START_EPOCH=$(date +%s)
+TEST_START_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+REPORT_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+RESULTS_DIR="$SCRIPT_DIR/test-results"
+mkdir -p "$RESULTS_DIR"
+REPORT_FILE="/dev/null"
+REPORT_FILES=()
+
 # --- Defaults ---
 AGENT_FILTER="all"
 MODEL=""
 MAX_BUDGET="5.00"
 VERBOSE=false
+ALLOW_ALL=false
 
 # --- Parse args ---
 while [[ $# -gt 0 ]]; do
@@ -31,8 +41,9 @@ while [[ $# -gt 0 ]]; do
     --model)    MODEL="$2"; shift 2 ;;
     --max-budget) MAX_BUDGET="$2"; shift 2 ;;
     --verbose)  VERBOSE=true; shift ;;
+    --allow-all) ALLOW_ALL=true; shift ;;
     -h|--help)
-      echo "Usage: $0 [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--verbose]"
+      echo "Usage: $0 [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--allow-all] [--verbose]"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -48,23 +59,62 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
-log()  { echo -e "${CYAN}[test]${NC} $*"; }
-pass() { echo -e "${GREEN}[PASS]${NC} $*"; }
-fail() { echo -e "${RED}[FAIL]${NC} $*"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+# tee_report: append plain text (no ANSI codes) to the report file
+tee_report() { sed 's/\x1b\[[0-9;]*m//g' >> "$REPORT_FILE"; }
+
+start_report() {
+  local agent_name="$1"
+  REPORT_FILE="$RESULTS_DIR/test-report-${agent_name}-${REPORT_TIMESTAMP}.txt"
+  REPORT_FILES+=("$REPORT_FILE")
+  {
+    echo "========================================================"
+    echo "  JDB Agentic Debugger — Test Report (${agent_name})"
+    echo "========================================================"
+    echo "Started at: $TEST_START_TS"
+    echo ""
+  } > "$REPORT_FILE"
+}
+
+finish_report() {
+  local end_epoch end_ts elapsed min sec
+  end_epoch=$(date +%s)
+  end_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  elapsed=$((end_epoch - TEST_START_EPOCH))
+  min=$((elapsed / 60))
+  sec=$((elapsed % 60))
+  {
+    echo ""
+    echo "========================================================"
+    echo "  Timing"
+    echo "========================================================"
+    echo "Started at:  $TEST_START_TS"
+    echo "Finished at: $end_ts"
+    echo "Duration:    ${min}m ${sec}s (${elapsed}s total)"
+    echo "========================================================"
+  } >> "$REPORT_FILE"
+  log "Test report saved to: $REPORT_FILE"
+  REPORT_FILE="/dev/null"
+}
+
+log()  { echo -e "${CYAN}[test]${NC} $*" | tee >(tee_report); }
+pass() { echo -e "${GREEN}[PASS]${NC} $*" | tee >(tee_report); }
+fail() { echo -e "${RED}[FAIL]${NC} $*" | tee >(tee_report); }
+warn() { echo -e "${YELLOW}[WARN]${NC} $*" | tee >(tee_report); }
 
 banner() {
   local agent_name="$1"
   local phase="$2"
-  echo ""
-  echo -e "${BOLD}╔══════════════════════════════════════════════════╗${NC}"
-  echo -e "${BOLD}║  ${agent_name} — ${phase}$(printf '%*s' $((38 - ${#agent_name} - ${#phase})) '')║${NC}"
-  echo -e "${BOLD}╚══════════════════════════════════════════════════╝${NC}"
-  echo ""
+  {
+    echo ""
+    echo -e "${BOLD}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}║  ${agent_name} — ${phase}$(printf '%*s' $((38 - ${#agent_name} - ${#phase})) '')║${NC}"
+    echo -e "${BOLD}╚══════════════════════════════════════════════════╝${NC}"
+    echo ""
+  } | tee >(tee_report)
 }
 
 separator() {
-  echo -e "${DIM}──────────────────────────────────────────────────${NC}"
+  echo -e "${DIM}──────────────────────────────────────────────────${NC}" | tee >(tee_report)
 }
 
 # ─────────────────────────────────────────────
@@ -107,12 +157,18 @@ log "Agents to test: ${AGENTS[*]}"
 # Compile .java → .class (with debug symbols)
 # ─────────────────────────────────────────────
 SAMPLE_SRC="$REPO_ROOT/sample-app/WarningAppTest.java"
+CONSOLE_SRC="$REPO_ROOT/sample-app/ConsoleAppTest.java"
 if [[ ! -f "$SAMPLE_SRC" ]]; then
   fail "Sample source not found: $SAMPLE_SRC"
   exit 1
 fi
+if [[ ! -f "$CONSOLE_SRC" ]]; then
+  fail "Sample source not found: $CONSOLE_SRC"
+  exit 1
+fi
 
-BASE_WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/jdb-test-XXXXXX")
+_tmpbase="${TMPDIR:-/tmp}"
+BASE_WORKDIR=$(mktemp -d "${_tmpbase%/}/jdb-test-XXXXXX")
 log "Base work directory: $BASE_WORKDIR"
 
 cleanup() {
@@ -127,42 +183,22 @@ trap cleanup EXIT
 
 log "Compiling sample app with debug symbols..."
 mkdir -p "$BASE_WORKDIR/classes"
-javac -g -d "$BASE_WORKDIR/classes" "$SAMPLE_SRC"
+javac -g -d "$BASE_WORKDIR/classes" "$SAMPLE_SRC" "$CONSOLE_SRC"
 
 # ─────────────────────────────────────────────
-# Shared prompt
+# Shared prompt (read from prompt.txt)
 # ─────────────────────────────────────────────
-PROMPT=$(cat <<'PROMPT_END'
-You are investigating a Java application that users have reported contains multiple bugs.
-
-## Context
-- The compiled application is in the `classes/` directory. The main class is `com.example.WarningAppTest`.
-- You do NOT have access to the source code. You must use the JDB debugger to investigate.
-- The JDB debugger scripts are available in `skills/jdb-debugger/scripts/`.
-- Compile commands are not needed — the .class files are already compiled with debug symbols.
-
-## Your Task
-1. Run the application first to observe its behavior: `java -cp classes com.example.WarningAppTest`
-2. Use the JDB debugger to investigate each bug you observe. Use the scripts in `skills/jdb-debugger/scripts/` for all JDB operations.
-3. For each bug found, determine the root cause by inspecting variables and stepping through code.
-4. Write a file called `DEBUG-REPORT.md` in the current directory with your findings.
-
-## DEBUG-REPORT.md Format
-The report MUST include a section for each bug found with:
-- A short title describing the bug
-- The exception type or symptom observed
-- The method and line where it occurs
-- The root cause explanation
-- Suggested fix
-
-Find ALL bugs in the application. There are multiple bugs to discover.
-PROMPT_END
-)
+PROMPT_FILE="$SCRIPT_DIR/prompt.txt"
+if [[ ! -f "$PROMPT_FILE" ]]; then
+  fail "prompt.txt not found: $PROMPT_FILE"
+  exit 1
+fi
+PROMPT=$(cat "$PROMPT_FILE")
 
 # ─────────────────────────────────────────────
 # Validation function
 # ─────────────────────────────────────────────
-BUGS_TOTAL=4
+BUGS_TOTAL=5
 
 check_bug() {
   local bug_num="$1"
@@ -228,6 +264,11 @@ validate_report() {
   check_bug 4 "StringIndexOutOfBoundsException (substring)" "$report_lower" \
     "stringindexoutofboundsexception|indexoutofbounds|index.*out.*bound" \
     "substring" "short|length|bound" \
+    && bugs_found=$((bugs_found + 1))
+
+  check_bug 5 "ConsoleAppTest discount lookup fails (untrimmed input)" "$report_lower" \
+    "trim|trailing.*space|whitespace|strip" \
+    "discount|consoleapptest|console.*app" "premium|map.*get|lookup|0.*instead" \
     && bugs_found=$((bugs_found + 1))
 
   separator
@@ -307,6 +348,7 @@ run_claude() {
   local workdir
   workdir=$(setup_workdir "claude")
 
+  start_report "claude"
   banner "Claude Code CLI" "Running"
 
   log "Work directory: $workdir"
@@ -316,10 +358,17 @@ run_claude() {
   local claude_args=(
     --print
     --plugin-dir "$workdir"
-    --dangerously-skip-permissions
     --max-budget-usd "$MAX_BUDGET"
     --no-session-persistence
   )
+
+  if [[ "$ALLOW_ALL" == true ]]; then
+    claude_args+=(--dangerously-skip-permissions)
+  fi
+
+  if [[ "$VERBOSE" == true ]]; then
+    claude_args+=(--verbose)
+  fi
 
   if [[ -n "$MODEL" ]]; then
     claude_args+=(--model "$MODEL")
@@ -348,6 +397,12 @@ run_claude() {
 
   banner "Claude Code CLI" "Validation"
   validate_report "Claude" "$workdir/DEBUG-REPORT.md"
+
+  if [[ -f "$workdir/DEBUG-REPORT.md" ]]; then
+    cp "$workdir/DEBUG-REPORT.md" "$RESULTS_DIR/DEBUG-REPORT-claude-${REPORT_TIMESTAMP}.md"
+    log "Saved: $RESULTS_DIR/DEBUG-REPORT-claude-${REPORT_TIMESTAMP}.md"
+  fi
+  finish_report
 }
 
 # ─────────────────────────────────────────────
@@ -357,6 +412,7 @@ run_copilot() {
   local workdir
   workdir=$(setup_workdir "copilot")
 
+  start_report "copilot"
   banner "GitHub Copilot CLI" "Running"
 
   log "Work directory: $workdir"
@@ -364,9 +420,16 @@ run_copilot() {
 
   local copilot_args=(
     -p "$PROMPT"
-    --allow-all
     --no-ask-user
   )
+
+  if [[ "$ALLOW_ALL" == true ]]; then
+    copilot_args+=(--yolo)
+  fi
+
+  if [[ "$VERBOSE" == true ]]; then
+    copilot_args+=(--log-level debug)
+  fi
 
   if [[ -n "$MODEL" ]]; then
     copilot_args+=(--model "$MODEL")
@@ -395,6 +458,12 @@ run_copilot() {
 
   banner "GitHub Copilot CLI" "Validation"
   validate_report "Copilot" "$workdir/DEBUG-REPORT.md"
+
+  if [[ -f "$workdir/DEBUG-REPORT.md" ]]; then
+    cp "$workdir/DEBUG-REPORT.md" "$RESULTS_DIR/DEBUG-REPORT-copilot-${REPORT_TIMESTAMP}.md"
+    log "Saved: $RESULTS_DIR/DEBUG-REPORT-copilot-${REPORT_TIMESTAMP}.md"
+  fi
+  finish_report
 }
 
 # ═════════════════════════════════════════════
@@ -414,6 +483,15 @@ for agent in "${AGENTS[@]}"; do
 done
 
 # ─────────────────────────────────────────────
+# Compute timing
+# ─────────────────────────────────────────────
+TEST_END_EPOCH=$(date +%s)
+TEST_END_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+TEST_ELAPSED=$((TEST_END_EPOCH - TEST_START_EPOCH))
+ELAPSED_MIN=$((TEST_ELAPSED / 60))
+ELAPSED_SEC=$((TEST_ELAPSED % 60))
+
+# ─────────────────────────────────────────────
 # Final summary
 # ─────────────────────────────────────────────
 echo ""
@@ -426,21 +504,23 @@ for agent in "${AGENTS[@]}"; do
   local_workdir="$BASE_WORKDIR/$agent"
   report="$local_workdir/DEBUG-REPORT.md"
   if [[ -f "$report" ]]; then
-    pass "$agent — DEBUG-REPORT.md created"
+    echo -e "${GREEN}[PASS]${NC} $agent — DEBUG-REPORT.md created"
   else
-    fail "$agent — DEBUG-REPORT.md missing"
+    echo -e "${RED}[FAIL]${NC} $agent — DEBUG-REPORT.md missing"
   fi
 done
 
 echo ""
 if [[ $OVERALL_EXIT -eq 0 ]]; then
-  pass "All agent tests passed! ✅"
+  echo -e "${GREEN}[PASS]${NC} All agent tests passed! ✅"
 else
-  fail "Some agent tests failed. ❌"
+  echo -e "${RED}[FAIL]${NC} Some agent tests failed. ❌"
 fi
 
+echo -e "${CYAN}[test]${NC} Duration: ${ELAPSED_MIN}m ${ELAPSED_SEC}s (started $TEST_START_TS, finished $TEST_END_TS)"
+
 if [[ "$VERBOSE" == true ]]; then
-  log "Work directory preserved: $BASE_WORKDIR"
+  echo -e "${CYAN}[test]${NC} Work directory preserved: $BASE_WORKDIR"
 fi
 
 exit $OVERALL_EXIT

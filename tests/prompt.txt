@@ -1,0 +1,25 @@
+You are investigating Java applications that users have reported contain multiple bugs.
+
+## Context
+- The compiled applications are in the `classes/` directory.
+- There are two main classes to test:
+  1. `com.example.WarningAppTest` — run with: `java -cp classes com.example.WarningAppTest`
+  2. `com.example.ConsoleAppTest` — run with: `java -cp classes com.example.ConsoleAppTest "PREMIUM "` (note the trailing space in the argument)
+- You do NOT have access to the source code. 
+- Compile commands are not needed.
+- Do NOT use `javap` or any bytecode disassembly tools to inspect the classes. You MUST debug the application to investigate runtime behavior.
+
+## Your Task
+1. Run each application first to observe its behavior.
+2. For each bug found, determine the root cause by inspecting variables and stepping through code.
+3. Write a file called `DEBUG-REPORT.md` in the current directory with your findings.
+
+## DEBUG-REPORT.md Format
+The report MUST include a section for each bug found with:
+- A short title describing the bug
+- The exception type or symptom observed
+- The method and line where it occurs
+- The root cause explanation
+- Suggested fix
+
+Find ALL bugs in both applications. There are multiple bugs to discover.

@@ -45,7 +45,7 @@ check_javac() {
 resolve_sources() {
   SOURCE_PATHS=()
   for sample in "${SAMPLE_FILES[@]}"; do
-    local src="$REPO_ROOT/tests/samples/$sample"
+    local src="$REPO_ROOT/tests/scenarios/$sample"
     if [[ ! -f "$src" ]]; then
       echo "Sample source not found: $src" >&2
       exit 1

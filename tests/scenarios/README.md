@@ -15,7 +15,7 @@ All classes are in the **default package**.
 
 ## Compile
 
-From `tests/samples/`:
+From `tests/scenarios/`:
 
 ```bash
 mkdir -p out

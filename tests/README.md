@@ -9,7 +9,7 @@ tests/
 ├── prompt.txt              # The prompt given to each agent
 ├── prepare-test.sh         # Sets up an isolated directory for manual/interactive testing
 ├── run-test.sh             # Automated test runner with validation and reporting
-├── samples/                # Intentionally buggy Java source files
+├── scenarios/              # Intentionally buggy Java source files
 │   ├── WarningAppTest.java
 │   ├── ConsoleAppTest.java
 │   ├── AliasingCorruptionTest.java
@@ -24,9 +24,9 @@ tests/
 
 ## How It Works
 
-### 1. Sample Programs (`samples/`)
+### 1. Sample Programs (`scenarios/`)
 
-The `samples/` directory contains Java programs with intentional bugs spanning several categories:
+The `scenarios/` directory contains Java programs with intentional bugs spanning several categories:
 
 - **State bugs** — off-by-one counters, null corruption, wrong variable references
 - **Input handling** — missing `trim()`, substring bounds errors

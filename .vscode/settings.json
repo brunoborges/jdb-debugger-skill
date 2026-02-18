@@ -1,5 +1,5 @@
 {
     "java.project.sourcePaths": [
-        "tests/samples"
+        "tests/scenarios"
     ]
 }

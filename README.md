@@ -2,10 +2,6 @@
 
 An AI agent plugin that teaches AI agents to debug Java applications in real time using [**JDB**](https://docs.oracle.com/en/java/javase/25/docs/specs/man/jdb.html) — the command-line debugger shipped with every JDK. Compatible with [GitHub Copilot CLI](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-coding-agent) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
-## See demo
-
-https://github.com/user-attachments/assets/7b2e4e69-8067-4519-bb6d-03c408a0be8a
-
 ## What This Plugin Does
 
 When activated, this plugin enables AI agents to:

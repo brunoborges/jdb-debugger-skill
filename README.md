@@ -4,21 +4,20 @@ An AI agent plugin that teaches AI agents to debug Java applications in real tim
 
 ## Why an Agentic Debugger?
 
-AI coding agents are already powerful static analysts. They can read source code, decompile `.class` files, run `javap` to inspect bytecode, parse stack traces, and reason about what *should* happen at runtime. When that isn't enough, they insert print statements, re-run the program, and parse the output — iterating until they converge on the bug.
+AI coding agents are already powerful analysts. They can read source code, decompile `.class` files, run `javap` to inspect bytecode, and reason about what *should* happen at runtime. They can attach `jcmd`, `jstack`, and `jmap` to a live JVM to grab thread dumps, heap histograms, and GC stats — all without JDWP. When something goes wrong, they can insert print statements, re-run the program, and parse the output.
 
-So why give them a debugger?
+So why give them JDB on top of all that?
 
-Because **static analysis and logging can only tell you what the code *says* — a debugger tells you what the code *does*.** Many bugs live in the gap between the two: race conditions that depend on thread scheduling, state corruption that builds up across hundreds of method calls, environment-specific behavior driven by configuration or classloader ordering, or failures deep inside third-party libraries where decompiled code is hard to follow. These bugs don't yield to reading; they have to be caught in the act.
+Because none of those tools give an agent **control over execution**. They produce snapshots — what the JVM looks like *right now* or *after the fact*. But many bugs require an agent to pause the program at a precise moment and interrogate it: What is this variable's value on *this* line? Which branch did the code actually take? What did the object look like *before* the method mutated it? That's what a debugger does — and only a debugger.
 
-A debugger attached to a **live, running application** gives an agent capabilities that no amount of static reasoning can replicate:
+Specifically, JDB gives an agent capabilities no other JDK or OS tool provides:
 
-- **Observe actual runtime state** — variable values, object graphs, and thread states as they exist at a specific moment in execution, not as the agent infers they *might* be.
-- **Catch the exact moment of failure** — break on an exception the instant it's thrown, before it propagates and gets wrapped, rather than reasoning backwards from a stack trace.
-- **Follow real execution flow** — step through the actual path the code takes, including polymorphic dispatch, reflection, and dynamically loaded classes that are invisible to static analysis.
-- **Inspect without modifying** — no print statements to add, commit, and later clean up. No risk of Heisenbugs caused by logging changing timing or behavior. The codebase stays untouched.
-- **Debug live environments** — attach to a running JVM in staging or production to investigate issues that only reproduce under real load, real data, and real configuration — something print-and-rerun simply cannot do.
+- **Break on the exact moment of failure** — set a breakpoint on a line, method, or exception class, and the JVM *pauses right there*. Not a snapshot taken sometime after — the actual instant. The agent can then inspect locals, walk the call stack, and evaluate expressions against live objects in that frozen frame.
+- **Step through execution line by line** — follow the actual path the code takes through polymorphic dispatch, reflection, and dynamically loaded classes. No other tool lets an agent say "execute one more line and show me what changed."
+- **Evaluate expressions in context** — `print order.getItems().size()` or `eval config.getTimeout() * 2` against real objects on the current stack frame. This isn't heap analysis — it's interactive interrogation of live state at a precise point in execution.
+- **Reproduce and isolate timing-dependent bugs** — a breakpoint *freezes* a thread mid-execution, letting an agent inspect a race condition or state corruption that no amount of thread dumps or logging can reliably capture, because those tools change timing or only show state after the fact.
 
-Decompilers and bytecode tools help an agent understand *structure*. A debugger helps it understand *behavior*. The combination is what makes an agent a genuinely effective debugger, not just a code reader that guesses well. JDB ships with every JDK, requires no IDE, and works over a simple text protocol — making it the ideal bridge between AI agents and live Java processes.
+Tools like `jcmd` and `jstack` tell an agent *what the JVM is doing*. JDB lets an agent *control what happens next*. That's the difference between monitoring and debugging — and it's why agents need both. JDB ships with every JDK, requires no IDE, and works over a simple text protocol, making it the ideal bridge between AI agents and live Java processes.
 
 ## What This Plugin Does
 
